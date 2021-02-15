@@ -1,56 +1,28 @@
-use block::Block;
-use std::collections::HashMap;
+use block_map::BlockMap;
 use std::fmt;
 use std::fmt::{Debug, Display};
 use std::ops::{Add, Sub};
 
 mod block;
+mod block_map;
 
 type Position = (usize, usize);
 
 pub struct Mauer<'a, T: Debug + Display + Copy + Eq + Add<Output = T> + Sub<Output = T>> {
     size: usize,
-    //blocks: HashMap<Position, usize>,
-    blocks: HashMap<Position, Block<'a, T>>,
-    //blocks_vec: Vec<Block<'a, T>>,
+    blocks: BlockMap<'a, T>,
 }
 
 impl<'a, T: Debug + Display + Copy + Eq + Add<Output = T> + Sub<Output = T>> Mauer<'a, T> {
     pub fn new(size: usize) -> Self {
-        let mut blocks = HashMap::new();
-        //let mut blocks_vec = Vec::new();
-
-        for i in 1..=size {
-            for j in 1..=i {
-                let block = Block::new((i, j), None);
-                blocks.insert((i, j), block);
-                //blocks_vec.push(block);
-            }
-        }
-
-        for i in 1..=size {
-            for j in 1..=i {
-                let top_left = blocks.get(&(i - 1, j - 1));
-                let top_right = blocks.get(&(i - 1, j));
-                let left = blocks.get(&(i, j - 1));
-                let right = blocks.get(&(i, j + 1));
-                let bottom_left = blocks.get(&(i + 1, j));
-                let bottom_right = blocks.get(&(i + 1, j + 1));
-                let block = blocks.get_mut(&(i, j)).unwrap();
-                block.set_adjacent(top_left, top_right, left, right, bottom_left, bottom_right)
-            }
-        }
-
         Self {
             size,
-            blocks,
-            //blocks_vec,
-            //blocks: HashMap::new(),
+            blocks: BlockMap::new(size),
         }
     }
 
-    pub fn set(&mut self, pos: Position, value: T) {
-        if let Some(block) = self.blocks.get_mut(&pos) {
+    pub fn set(&'a mut self, pos: Position, value: T) {
+        if let Some(block) = self.blocks.get_mut(pos) {
             block.set(value);
         }
     }
@@ -59,14 +31,25 @@ impl<'a, T: Debug + Display + Copy + Eq + Add<Output = T> + Sub<Output = T>> Mau
         None
     }
 
-    fn calc_possible(&self) -> HashMap<Position, Block<'a, T>> {
+    fn calc_possible(&self) -> BlockMap<'a, T> {
         let new_blocks = self.blocks.clone();
         let mut changes = true;
         while changes {
             let value_count = new_blocks
                 .iter()
-                .filter(|(pos, block)| block.get().is_some())
+                .filter(|(_, block)| block.get().is_some())
                 .count();
+
+                //
+
+            let new_value_count = new_blocks
+                .iter()
+                .filter(|(_, block)| block.get().is_some())
+                .count();
+
+            if value_count == new_value_count {
+                changes = false;
+            }
         }
 
         new_blocks
@@ -145,7 +128,7 @@ impl<'a, T: Debug + Display + Copy + Eq + Add<Output = T> + Sub<Output = T>> Mau
 }
 
 impl<'a, T: Debug + Display + Copy + Eq + Add<Output = T> + Sub<Output = T>> Display
-    for Mauer<'a, T>
+    for Mauer<'_, T>
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut format = String::from("");
@@ -155,7 +138,7 @@ impl<'a, T: Debug + Display + Copy + Eq + Add<Output = T> + Sub<Output = T>> Dis
             let mut top_line = " ".chars().cycle().take(4 * identation).collect::<String>();
             let mut line = " ".chars().cycle().take(4 * identation).collect::<String>();
             for pos in 1..=row {
-                let block = self.blocks.get(&(row, pos));
+                let block = self.blocks.get((row, pos));
 
                 top_line = format!("{}+-------", top_line);
                 if let Some(block) = block {
