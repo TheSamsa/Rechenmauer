@@ -1,5 +1,8 @@
+use std::collections::BTreeMap;
 use std::fmt::{Debug, Display};
 use std::ops::{Add, Sub};
+
+use super::Position;
 
 // this is a newtrait way to alias the trait bounds.
 //pub trait Integer: Debug + Display + Copy +  Eq + Add + Sub {}
@@ -7,21 +10,51 @@ use std::ops::{Add, Sub};
 
 #[derive(Debug, Clone)]
 pub struct Block<'a, T: Debug + Display + Copy + Eq + Add<Output = T> + Sub<Output = T>> {
-    position: (usize, usize),
-    value: Option<T>,
-    top_left: Option<&'a Block<'a, T>>,
-    top_right: Option<&'a Block<'a, T>>,
-    left: Option<&'a Block<'a, T>>,
-    right: Option<&'a Block<'a, T>>,
-    bottom_left: Option<&'a Block<'a, T>>,
-    bottom_right: Option<&'a Block<'a, T>>,
+    value: Option<&'a T>,
+    top_left: Option<Option<&'a T>>,
+    top_right: Option<Option<&'a T>>,
+    left: Option<Option<&'a T>>,
+    right: Option<Option<&'a T>>,
+    bottom_left: Option<Option<&'a T>>,
+    bottom_right: Option<Option<&'a T>>,
 }
 
 impl<'a, T: Debug + Display + Copy + Eq + Add<Output = T> + Sub<Output = T>> Block<'a, T> {
-    pub fn new(position: (usize, usize), value: Option<T>) -> Self {
+    pub fn new(position: &Position, blocks: &'a BTreeMap<Position, Option<T>>) -> Self {
+        let value = blocks.get(position);
+        if let Some(value) = value {
+            let top_left = blocks
+                .get(&(position.0 - 1, position.1 - 1))
+                .map(|val| val.as_ref());
+            let top_right = blocks
+                .get(&(position.0 - 1, position.1))
+                .map(|val| val.as_ref());
+            let left = blocks
+                .get(&(position.0, position.1 - 1))
+                .map(|val| val.as_ref());
+            let right = blocks
+                .get(&(position.0, position.1 + 1))
+                .map(|val| val.as_ref());
+            let bottom_left = blocks
+                .get(&(position.0 + 1, position.1))
+                .map(|val| val.as_ref());
+            let bottom_right = blocks
+                .get(&(position.0 + 1, position.1 + 1))
+                .map(|val| val.as_ref());
+
+            return Self {
+                value: value.as_ref(),
+                top_left,
+                top_right,
+                left,
+                right,
+                bottom_left,
+                bottom_right,
+            };
+        }
+
         Self {
-            position,
-            value,
+            value: None,
             top_left: None,
             top_right: None,
             left: None,
@@ -31,29 +64,8 @@ impl<'a, T: Debug + Display + Copy + Eq + Add<Output = T> + Sub<Output = T>> Blo
         }
     }
 
-    pub fn set_adjacent(
-        &mut self,
-        top_left: Option<&'a Block<T>>,
-        top_right: Option<&'a Block<T>>,
-        left: Option<&'a Block<T>>,
-        right: Option<&'a Block<T>>,
-        bottom_left: Option<&'a Block<T>>,
-        bottom_right: Option<&'a Block<T>>,
-    ) {
-        self.top_left = top_left;
-        self.top_right = top_right;
-        self.left = left;
-        self.right = right;
-        self.bottom_left = bottom_left;
-        self.bottom_right = bottom_right;
-    }
-
-    pub fn get(&self) -> Option<T> {
+    pub fn get(&self) -> Option<&'a T> {
         self.value
-    }
-
-    pub fn set(&mut self, value: T) {
-        self.value = Some(value)
     }
 
     pub fn is_top(&self) -> bool {
@@ -78,7 +90,7 @@ impl<'a, T: Debug + Display + Copy + Eq + Add<Output = T> + Sub<Output = T>> Blo
     pub fn calc(&self) -> Option<T> {
         // skip calculating because we already have a value
         if self.value.is_some() {
-            return self.value;
+            return self.value.copied();
         }
 
         self.calc_from_bottom()
@@ -87,105 +99,54 @@ impl<'a, T: Debug + Display + Copy + Eq + Add<Output = T> + Sub<Output = T>> Blo
 
     fn calc_from_bottom(&self) -> Option<T> {
         if self.is_bottom() {
-            return self.get();
+            return self.get().copied();
         }
 
         // safe to unwrap because we check with is_bottom before
         let bottom_left = self.bottom_left.unwrap();
         let bottom_right = self.bottom_right.unwrap();
 
-        bottom_left + bottom_right
+        if let Some(bl_value) = bottom_left {
+            if let Some(br_value) = bottom_right {
+                return Some(*bl_value + *br_value);
+            }
+        }
+
+        None
     }
 
     fn calc_from_left(&self) -> Option<T> {
         if self.is_left() {
-            return self.get();
+            return self.get().copied();
         }
 
         // safe to unwrap because we check with is_left before
         let top_left = self.top_left.unwrap();
         let left = self.left.unwrap();
+        if let Some(tl_left) = top_left {
+            if let Some(l_value) = left {
+                return Some(*tl_left - *l_value);
+            }
+        }
 
-        top_left - left
+        None
     }
 
     fn calc_from_right(&self) -> Option<T> {
         if self.is_right() {
-            return self.get();
+            return self.get().copied();
         }
 
         // safe to unwrap because we check with is_right before
         let top_right = self.top_right.unwrap();
         let right = self.right.unwrap();
 
-        top_right - right
-    }
-}
-
-impl<'a, T: Debug + Display + Copy + Eq + Add<Output = T> + Sub<Output = T>> Add for Block<'a, T> {
-    type Output = Option<T>;
-
-    fn add(self, other: Self) -> Option<T> {
-        if let Some(self_value) = self.get() {
-            if let Some(other_value) = other.get() {
-                Some(self_value + other_value)
-            } else {
-                None
+        if let Some(tr_value) = top_right {
+            if let Some(r_value) = right {
+                return Some(*tr_value - *r_value);
             }
-        } else {
-            None
         }
-    }
-}
 
-impl<'a, T: Debug + Display + Copy + Eq + Add<Output = T> + Sub<Output = T>> Add
-    for &'a Block<'a, T>
-{
-    type Output = Option<T>;
-
-    fn add(self, other: Self) -> Option<T> {
-        if let Some(self_value) = self.get() {
-            if let Some(other_value) = other.get() {
-                Some(self_value + other_value)
-            } else {
-                None
-            }
-        } else {
-            None
-        }
-    }
-}
-
-impl<'a, T: Debug + Display + Copy + Eq + Add<Output = T> + Sub<Output = T>> Sub for Block<'a, T> {
-    type Output = Option<T>;
-
-    fn sub(self, other: Self) -> Option<T> {
-        if let Some(self_value) = self.get() {
-            if let Some(other_value) = other.get() {
-                Some(self_value - other_value)
-            } else {
-                None
-            }
-        } else {
-            None
-        }
-    }
-}
-
-impl<'a, T: Debug + Display + Copy + Eq + Add<Output = T> + Sub<Output = T>> Sub
-    for &'a Block<'a, T>
-{
-    type Output = Option<T>;
-
-    fn sub(self, other: Self) -> Option<T> {
-        if let Some(self_value) = self.get() {
-            if let Some(other_value) = other.get() {
-                Some(self_value - other_value)
-            } else {
-                None
-            }
-        } else {
-            None
-        }
+        None
     }
 }

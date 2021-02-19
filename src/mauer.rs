@@ -1,50 +1,83 @@
-use block_map::BlockMap;
+use block::Block;
+use std::collections::BTreeMap;
 use std::fmt;
 use std::fmt::{Debug, Display};
 use std::ops::{Add, Sub};
 
 mod block;
-mod block_map;
 
 type Position = (usize, usize);
 
-pub struct Mauer<'a, T: Debug + Display + Copy + Eq + Add<Output = T> + Sub<Output = T>> {
+pub struct Mauer<T: Debug + Display + Copy + Eq + Add<Output = T> + Sub<Output = T>> {
+    rows: usize,
     size: usize,
-    blocks: BlockMap<'a, T>,
+    blocks: BTreeMap<Position, Option<T>>,
 }
 
-impl<'a, T: Debug + Display + Copy + Eq + Add<Output = T> + Sub<Output = T>> Mauer<'a, T> {
-    pub fn new(size: usize) -> Self {
-        Self {
-            size,
-            blocks: BlockMap::new(size),
+impl<T: Debug + Display + Copy + Eq + Add<Output = T> + Sub<Output = T>> Mauer<T> {
+    pub fn new(rows: usize) -> Self {
+        let mut size = 1;
+        let mut blocks = BTreeMap::new();
+
+        for i in 1..=rows {
+            for j in 1..=i {
+                size += 1;
+                blocks.insert((i, j), None);
+            }
         }
+
+        Self { rows, size, blocks }
     }
 
-    pub fn set(&'a mut self, pos: Position, value: T) {
-        if let Some(block) = self.blocks.get_mut(pos) {
-            block.set(value);
+    pub fn set(&mut self, pos: Position, value: T) {
+        self.blocks.insert(pos, Some(value));
+    }
+
+    pub fn solve(&self) -> Option<Mauer<T>> {
+        let blocks = self.calc_possible();
+
+        // if not all values are known here, we have to try and use some maths.
+        if blocks.iter().filter(|(_, val)| val.is_some()).count() < self.size {
+            // first check bottom line if it has only one missing value
+            let bottom_lane: BTreeMap<&Position, &Option<T>> = blocks.iter()
+                .filter(|(pos, _)| pos.0 == self.rows)
+                .collect();
+
+            if (bottom_lane.iter().filter(|(_, value)| value.is_none()).count()) == 1 {
+                // only one value missing
+                // look upwards from missing value if we find one
+            }
+            //        let left_lane = self.blocks.iter().filter(|(pos, _)| pos.1 == 1);
+            //        let right_lane = self.blocks.iter().filter(|(pos, _)| pos.0 == pos.1);
         }
+
+        // TODO do integrity check afterwards
+
+        Some(Self {
+            rows: self.rows,
+            size: self.size,
+            blocks,
+        })
     }
 
-    pub fn solve(&self) -> Option<Mauer<'a, T>> {
-        None
-    }
-
-    fn calc_possible(&self) -> BlockMap<'a, T> {
-        let new_blocks = self.blocks.clone();
+    fn calc_possible(&self) -> BTreeMap<Position, Option<T>> {
+        let mut new_blocks = self.blocks.clone();
         let mut changes = true;
         while changes {
             let value_count = new_blocks
                 .iter()
-                .filter(|(_, block)| block.get().is_some())
+                .filter(|(_, block)| block.is_some())
                 .count();
 
-                //
+            for (pos, _) in self.blocks.iter() {
+                let block = Block::new(&pos, &new_blocks);
+                let value = block.calc();
+                new_blocks.insert(*pos, value);
+            }
 
             let new_value_count = new_blocks
                 .iter()
-                .filter(|(_, block)| block.get().is_some())
+                .filter(|(_, block)| block.is_some())
                 .count();
 
             if value_count == new_value_count {
@@ -54,96 +87,22 @@ impl<'a, T: Debug + Display + Copy + Eq + Add<Output = T> + Sub<Output = T>> Mau
 
         new_blocks
     }
-
-    //    pub fn solve(&mut self) -> Option<Mauer> {
-    //        // first calculate every possible combination of adjacent blocks for bottom to top
-    //        let new_blocks = self.calc_possible();
-    //
-    //        // first check bottom line if it has only one missing value
-    //        let bottom_lane: HashMap<&Position, &usize> = self
-    //            .blocks
-    //            .iter()
-    //            .filter(|(pos, _)| pos.0 == self.size)
-    //            .collect();
-    //        if (bottom_lane.iter().count() - self.size) == 1 {
-    //            // only one value missing
-    //            // look upwards from missing value if we find one
-    //            bottom_lane
-    //                .keys()
-    //                .map(|(_, pos)| *pos)
-    //                .collect::<Vec<usize>>()
-    //                .sort();
-    //        }
-    //        //        let left_lane = self.blocks.iter().filter(|(pos, _)| pos.1 == 1);
-    //        //        let right_lane = self.blocks.iter().filter(|(pos, _)| pos.0 == pos.1);
-    //
-    //        Some(Mauer {
-    //            size: self.size,
-    //            blocks: new_blocks,
-    //        })
-    //    }
-    //
-    //    fn calc_possible(&self) -> HashMap<Position, usize> {
-    //        let mut new_blocks = self.blocks.clone();
-    //        for (row, pos) in self.walker() {
-    //            if row == 1 || row == pos {
-    //                continue;
-    //            }
-    //
-    //            if let Some(block_value) = self.blocks.get(&(row, pos)) {
-    //                if let Some(adjacent_value) = self.blocks.get(&(row, pos + 1)) {
-    //                    let new_pos = (row - 1, pos);
-    //                    let new_value = block_value + adjacent_value;
-    //                    if let Some(existing_value) = new_blocks.get(&new_pos) {
-    //                        if *existing_value != new_value {
-    //                            println!("want to overwrite {} with {}", existing_value, new_value);
-    //                        }
-    //                    } else {
-    //                        new_blocks.insert((row - 1, pos), block_value + adjacent_value);
-    //                    }
-    //                }
-    //            }
-    //        }
-    //
-    //        new_blocks
-    //    }
-    //
-    //    fn walker(&self) -> Vec<(usize, usize)> {
-    //        let walker_rows = (1..=self.size).fold(Vec::new(), |mut walker, i| {
-    //            (1..=i).for_each(|_| walker.push(i));
-    //
-    //            walker
-    //        });
-    //        let walker_blocks = (1..=self.size).fold(Vec::new(), |mut walker, i| {
-    //            (1..=i).for_each(|j| walker.push(j));
-    //
-    //            walker
-    //        });
-    //
-    //        walker_rows
-    //            .into_iter()
-    //            .zip(walker_blocks.into_iter())
-    //            .collect()
-    //    }
 }
 
-impl<'a, T: Debug + Display + Copy + Eq + Add<Output = T> + Sub<Output = T>> Display
-    for Mauer<'_, T>
-{
+impl<T: Debug + Display + Copy + Eq + Add<Output = T> + Sub<Output = T>> Display for Mauer<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut format = String::from("");
 
-        for row in 1..=self.size {
-            let identation = self.size - row;
+        for row in 1..=self.rows {
+            let identation = self.rows - row;
             let mut top_line = " ".chars().cycle().take(4 * identation).collect::<String>();
             let mut line = " ".chars().cycle().take(4 * identation).collect::<String>();
             for pos in 1..=row {
-                let block = self.blocks.get((row, pos));
+                let block = self.blocks.get(&(row, pos));
 
                 top_line = format!("{}+-------", top_line);
                 if let Some(block) = block {
-                    //dbg!(block);
-                    if let Some(value) = block.get() {
+                    if let Some(value) = block {
                         line = format!("{}| {:^5} ", line, value);
                     } else {
                         line = format!("{}|       ", line);
@@ -165,7 +124,7 @@ impl<'a, T: Debug + Display + Copy + Eq + Add<Output = T> + Sub<Output = T>> Dis
             "+-------"
                 .chars()
                 .cycle()
-                .take(8 * self.size)
+                .take(8 * self.rows)
                 .collect::<String>()
         );
         write!(f, "{}", format)
