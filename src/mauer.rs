@@ -5,6 +5,7 @@ use std::fmt::{Debug, Display};
 use std::ops::{Add, Sub};
 
 mod block;
+mod block_map;
 
 type Position = (usize, usize);
 
@@ -39,11 +40,17 @@ impl<T: Debug + Display + Copy + Eq + Add<Output = T> + Sub<Output = T>> Mauer<T
         // if not all values are known here, we have to try and use some maths.
         if blocks.iter().filter(|(_, val)| val.is_some()).count() < self.size {
             // first check bottom line if it has only one missing value
-            let bottom_lane: BTreeMap<&Position, &Option<T>> = blocks.iter()
+            let bottom_lane: BTreeMap<&Position, &Option<T>> = blocks
+                .iter()
                 .filter(|(pos, _)| pos.0 == self.rows)
                 .collect();
 
-            if (bottom_lane.iter().filter(|(_, value)| value.is_none()).count()) == 1 {
+            if (bottom_lane
+                .iter()
+                .filter(|(_, value)| value.is_none())
+                .count())
+                == 1
+            {
                 // only one value missing
                 // look upwards from missing value if we find one
             }
