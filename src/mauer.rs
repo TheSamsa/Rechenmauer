@@ -32,12 +32,7 @@ impl<T: Debug + Display + Copy + Eq + Add<Output = T> + Sub<Output = T>> Mauer<T
             // first check bottom line if it has only one missing value
             let bottom_lane = self.blocks.bottom_lane();
 
-            if (bottom_lane
-                .iter()
-                .filter(|(_, value)| value.is_none())
-                .count())
-                == 1
-            {
+            if self.blocks.bottom_lane_value_count() == 1 {
                 // only one value missing
                 // look upwards from missing value if we find one
             }

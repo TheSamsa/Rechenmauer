@@ -33,7 +33,7 @@ impl Position {
     }
 
     pub fn bottom_left(&self) -> Self {
-        Self(self.1.saturating_add(1), self.1)
+        Self(self.0.saturating_add(1), self.1)
     }
 
     pub fn bottom_right(&self) -> Self {
@@ -93,6 +93,13 @@ impl<T: Debug + Display + Copy + Eq + Add<Output = T> + Sub<Output = T>> BlockMa
             .iter()
             .filter(|(pos, _)| pos.0 == self.rows)
             .collect()
+    }
+
+    pub fn bottom_lane_value_count(&self) -> usize {
+        self.bottom_lane()
+            .iter()
+            .filter(|(_, value)| value.is_none())
+            .count()
     }
 
     pub fn left_lane(&self) -> BTreeMap<&Position, &Option<T>> {
