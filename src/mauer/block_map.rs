@@ -1,11 +1,21 @@
 use std::cmp::{Eq, Ord, PartialEq, PartialOrd};
 use std::collections::BTreeMap;
-use std::rc::Rc;
+use std::fmt::{Debug, Display};
+use std::iter::Iterator;
+use std::ops::{Add, Sub};
 
-#[derive(Copy, Clone, PartialOrd, Ord, PartialEq, Eq)]
-struct Position(usize, usize);
+#[derive(Debug, Copy, Clone, PartialOrd, Ord, PartialEq, Eq)]
+pub struct Position(usize, usize);
 
 impl Position {
+    pub fn new(row: usize, col: usize) -> Self {
+        Self(row, col)
+    }
+
+    fn spire() -> Self {
+        Self(1, 1)
+    }
+
     pub fn top_left(&self) -> Self {
         Self(self.0.saturating_sub(1), self.1.saturating_sub(1))
     }
@@ -31,84 +41,167 @@ impl Position {
     }
 }
 
-struct Block<'t, T> {
-    pos: Position,
-    value: Option<T>,
-    top_left: Option<&'t Block<'t, T>>,
-    top_right: Option<&'t Block<'t, T>>,
-    left: Option<&'t Block<'t, T>>,
-    right: Option<&'t Block<'t, T>>,
-    bottom_left: Option<&'t Block<'t, T>>,
-    bottom_right: Option<&'t Block<'t, T>>,
+#[derive(Clone)]
+pub struct BlockMap<T: Debug + Display + Copy + Eq + Add<Output = T> + Sub<Output = T>> {
+    rows: usize,
+    size: usize,
+    positions: Vec<Position>,
+    inner: BTreeMap<Position, Option<T>>,
 }
 
-impl<'t, T> Block<'t, T> {
-    pub fn new(pos: Position, value: Option<T>) -> Self {
-        Self {
-            pos,
-            value,
-            top_left: None,
-            top_right: None,
-            left: None,
-            right: None,
-            bottom_left: None,
-            bottom_right: None,
-        }
-    }
-
-    fn set_adjacent(
-        &mut self,
-        top_left: Option<&'t Block<T>>,
-        top_right: Option<&'t Block<T>>,
-        left: Option<&'t Block<T>>,
-        right: Option<&'t Block<T>>,
-        bottom_left: Option<&'t Block<T>>,
-        bottom_right: Option<&'t Block<T>>,
-    ) {
-        self.top_left = top_left;
-        self.top_right = top_right;
-        self.left = left;
-        self.right = right;
-        self.bottom_left = bottom_left;
-        self.bottom_right = bottom_right;
-    }
-}
-
-struct BlockMap<'a, T> {
-    inner: BTreeMap<Position, Block<'a, T>>,
-}
-
-impl<'a, T> BlockMap<'a, T> {
-    pub fn new(input: BTreeMap<Position, Option<T>>) -> Self {
+impl<T: Debug + Display + Copy + Eq + Add<Output = T> + Sub<Output = T>> BlockMap<T> {
+    pub fn new(rows: usize) -> Self {
+        let mut size = 1;
+        let mut positions = Vec::new();
         let mut inner = BTreeMap::new();
-        for (pos, val) in input.into_iter() {
-            let block = Block::new(pos, val);
-            inner.insert(pos, block);
+
+        for i in 1..=rows {
+            for j in 1..=i {
+                size += 1;
+                let pos = Position::new(i, j);
+                inner.insert(pos, None);
+                positions.push(pos);
+            }
         }
 
-        for (pos, val) in &mut inner {
-            let top_left = inner
-                .get(&pos.top_left())
-                .map_or(None, |tl| Some(tl));
-            let top_right = inner
-                .get(&pos.top_right())
-                .map_or(None, |tr| Some(tr));
-            let left = inner
-                .get(&pos.left())
-                .map_or(None, |l| Some(l));
-            let right = inner
-                .get(&pos.right())
-                .map_or(None, |r| Some(r));
-            let bottom_left = inner
-                .get(&pos.bottom_left())
-                .map_or(None, |bl| Some(bl));
-            let bottom_right = inner
-                .get(&pos.bottom_right())
-                .map_or(None, |br| Some(br));
+        Self {
+            rows,
+            size,
+            positions,
+            inner,
+        }
+    }
 
-            val.set_adjacent(top_left, top_right, left, right, bottom_left, bottom_right);
+    pub fn get(&self, pos: &Position) -> Option<&Option<T>> {
+        self.inner.get(pos)
+    }
+
+    pub fn set(&mut self, pos: Position, value: T) {
+        self.inner.insert(pos, Some(value));
+    }
+
+    pub fn solved(&self) -> bool {
+        self.value_count() == self.size
+    }
+
+    pub fn value_count(&self) -> usize {
+        self.inner.iter().filter(|(_, val)| val.is_some()).count()
+    }
+
+    pub fn bottom_lane(&self) -> BTreeMap<&Position, &Option<T>> {
+        self.inner
+            .iter()
+            .filter(|(pos, _)| pos.0 == self.rows)
+            .collect()
+    }
+
+    pub fn left_lane(&self) -> BTreeMap<&Position, &Option<T>> {
+        self.inner.iter().filter(|(pos, _)| pos.1 == 1).collect()
+    }
+
+    pub fn right_lane(&self) -> BTreeMap<&Position, &Option<T>> {
+        self.inner
+            .iter()
+            .filter(|(pos, _)| pos.0 == pos.1)
+            .collect()
+    }
+
+    pub fn is_top(&self, pos: &Position) -> bool {
+        self.inner.get(&pos.top_left()).is_none()
+            && self.inner.get(&pos.top_right()).is_none()
+            && self.inner.get(&pos.left()).is_none()
+            && self.inner.get(&pos.right()).is_none()
+    }
+
+    pub fn is_left(&self, pos: &Position) -> bool {
+        self.inner.get(&pos.top_left()).is_none() && self.inner.get(&pos.left()).is_none()
+    }
+
+    pub fn is_right(&self, pos: &Position) -> bool {
+        self.inner.get(&pos.top_right()).is_none() && self.inner.get(&pos.right()).is_none()
+    }
+
+    pub fn is_bottom(&self, pos: &Position) -> bool {
+        self.inner.get(&pos.bottom_left()).is_none()
+            && self.inner.get(&pos.bottom_right()).is_none()
+    }
+
+    pub fn calc_all(&mut self) {
+        for pos in self.positions.clone().iter() {
+            let value = self.calc(pos);
+            self.inner.insert(*pos, value);
+        }
+    }
+
+    fn calc(&mut self, pos: &Position) -> Option<T> {
+        // skip calculating because we already have a value
+        if let Some(value) = self.inner.get(pos) {
+            if value.is_some() {
+                return value.as_ref().copied();
+            }
+
+            self.calc_from_bottom(pos).or(self
+                .calc_from_left(pos)
+                .or(self.calc_from_right(pos).or(None)))
+        } else {
+            None
+        }
+    }
+
+    fn calc_from_bottom(&self, pos: &Position) -> Option<T> {
+        if self.is_bottom(pos) {
+            // TODO get rid of unwrap, works for now, because this function is only called via calc
+            return self.inner.get(pos).unwrap().as_ref().copied();
         }
 
-        Self { inner }
+        // safe to unwrap because we check with is_bottom before
+        let bottom_left = self.get(&pos.bottom_left()).unwrap();
+        let bottom_right = self.get(&pos.bottom_right()).unwrap();
+
+        if let Some(bl_value) = bottom_left.as_ref() {
+            if let Some(br_value) = bottom_right.as_ref() {
+                return Some(*bl_value + *br_value);
+            }
+        }
+
+        None
+    }
+
+    fn calc_from_left(&self, pos: &Position) -> Option<T> {
+        if self.is_left(pos) {
+            // TODO get rid of unwrap, works for now, because this function is only called via calc
+            return self.inner.get(pos).unwrap().as_ref().copied();
+        }
+
+        // safe to unwrap because we check with is_left before
+        let top_left = self.get(&pos.top_left()).unwrap();
+        let left = self.get(&pos.left()).unwrap();
+
+        if let Some(tl_left) = top_left.as_ref() {
+            if let Some(l_value) = left.as_ref() {
+                return Some(*tl_left - *l_value);
+            }
+        }
+
+        None
+    }
+
+    fn calc_from_right(&self, pos: &Position) -> Option<T> {
+        if self.is_right(pos) {
+            // TODO get rid of unwrap, works for now, because this function is only called via calc
+            return self.inner.get(pos).unwrap().as_ref().copied();
+        }
+
+        // safe to unwrap because we check with is_right before
+        let top_right = self.get(&pos.top_right()).unwrap();
+        let right = self.get(&pos.right()).unwrap();
+
+        if let Some(tr_value) = top_right.as_ref() {
+            if let Some(r_value) = right.as_ref() {
+                return Some(*tr_value - *r_value);
+            }
+        }
+
+        None
     }
 }

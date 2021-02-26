@@ -1,49 +1,36 @@
-use block::Block;
-use std::collections::BTreeMap;
+use block_map::BlockMap;
 use std::fmt;
 use std::fmt::{Debug, Display};
 use std::ops::{Add, Sub};
 
-mod block;
-mod block_map;
+pub use block_map::Position;
 
-type Position = (usize, usize);
+mod block_map;
 
 pub struct Mauer<T: Debug + Display + Copy + Eq + Add<Output = T> + Sub<Output = T>> {
     rows: usize,
-    size: usize,
-    blocks: BTreeMap<Position, Option<T>>,
+    blocks: BlockMap<T>,
 }
 
 impl<T: Debug + Display + Copy + Eq + Add<Output = T> + Sub<Output = T>> Mauer<T> {
     pub fn new(rows: usize) -> Self {
-        let mut size = 1;
-        let mut blocks = BTreeMap::new();
-
-        for i in 1..=rows {
-            for j in 1..=i {
-                size += 1;
-                blocks.insert((i, j), None);
-            }
+        Self {
+            rows,
+            blocks: BlockMap::new(rows),
         }
-
-        Self { rows, size, blocks }
     }
 
     pub fn set(&mut self, pos: Position, value: T) {
-        self.blocks.insert(pos, Some(value));
+        self.blocks.set(pos, value);
     }
 
-    pub fn solve(&self) -> Option<Mauer<T>> {
-        let blocks = self.calc_possible();
+    pub fn solve(&mut self) {
+        self.calc_possible();
 
         // if not all values are known here, we have to try and use some maths.
-        if blocks.iter().filter(|(_, val)| val.is_some()).count() < self.size {
+        if !self.blocks.solved() {
             // first check bottom line if it has only one missing value
-            let bottom_lane: BTreeMap<&Position, &Option<T>> = blocks
-                .iter()
-                .filter(|(pos, _)| pos.0 == self.rows)
-                .collect();
+            let bottom_lane = self.blocks.bottom_lane();
 
             if (bottom_lane
                 .iter()
@@ -59,40 +46,21 @@ impl<T: Debug + Display + Copy + Eq + Add<Output = T> + Sub<Output = T>> Mauer<T
         }
 
         // TODO do integrity check afterwards
-
-        Some(Self {
-            rows: self.rows,
-            size: self.size,
-            blocks,
-        })
     }
 
-    fn calc_possible(&self) -> BTreeMap<Position, Option<T>> {
-        let mut new_blocks = self.blocks.clone();
+    fn calc_possible(&mut self) {
         let mut changes = true;
         while changes {
-            let value_count = new_blocks
-                .iter()
-                .filter(|(_, block)| block.is_some())
-                .count();
+            let value_count = self.blocks.value_count();
 
-            for (pos, _) in self.blocks.iter() {
-                let block = Block::new(&pos, &new_blocks);
-                let value = block.calc();
-                new_blocks.insert(*pos, value);
-            }
+            self.blocks.calc_all();
 
-            let new_value_count = new_blocks
-                .iter()
-                .filter(|(_, block)| block.is_some())
-                .count();
+            let new_value_count = self.blocks.value_count();
 
             if value_count == new_value_count {
                 changes = false;
             }
         }
-
-        new_blocks
     }
 }
 
@@ -105,7 +73,7 @@ impl<T: Debug + Display + Copy + Eq + Add<Output = T> + Sub<Output = T>> Display
             let mut top_line = " ".chars().cycle().take(4 * identation).collect::<String>();
             let mut line = " ".chars().cycle().take(4 * identation).collect::<String>();
             for pos in 1..=row {
-                let block = self.blocks.get(&(row, pos));
+                let block = self.blocks.get(&Position::new(row, pos));
 
                 top_line = format!("{}+-------", top_line);
                 if let Some(block) = block {
