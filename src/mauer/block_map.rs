@@ -5,7 +5,7 @@ use std::iter::Iterator;
 use std::ops::{Add, Sub};
 
 #[derive(Debug, Copy, Clone, PartialOrd, Ord, PartialEq, Eq)]
-pub struct Position(usize, usize);
+pub struct Position(pub usize, pub usize);
 
 impl Position {
     pub fn new(row: usize, col: usize) -> Self {
@@ -131,6 +131,28 @@ impl<T: Debug + Display + Copy + Eq + Add<Output = T> + Sub<Output = T>> BlockMa
     pub fn is_bottom(&self, pos: &Position) -> bool {
         self.inner.get(&pos.bottom_left()).is_none()
             && self.inner.get(&pos.bottom_right()).is_none()
+    }
+
+    pub fn bottom_lane_spire(&self, missing_pos: Position) -> Option<(&Position, &Option<T>)> {
+        self.inner
+            .iter()
+            .rev()
+            .filter(|(pos, _)| {
+                if pos.0 == missing_pos.0 {
+                    return false;
+                }
+
+                let lower = missing_pos.1.saturating_sub(missing_pos.0 - pos.0);
+                let lower = if lower < 1 { 1 } else { lower };
+                let upper = if missing_pos.1 <= pos.0 { missing_pos.1 } else { pos.0 };
+
+                if lower <= pos.1 && pos.1 <= upper {
+                    true
+                } else {
+                    false
+                }
+            })
+            .find(|(_, val)| val.is_some())
     }
 
     pub fn calc_all(&mut self) {

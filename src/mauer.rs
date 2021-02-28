@@ -34,7 +34,18 @@ impl<T: Debug + Display + Copy + Eq + Add<Output = T> + Sub<Output = T>> Mauer<T
 
             if self.blocks.bottom_lane_value_count() == 1 {
                 // only one value missing
-                // look upwards from missing value if we find one
+                let missing_pos = bottom_lane.iter().fold(Position::new(0,0), |ret, (pos, val)| {
+                    if val.is_none() { **pos } else { ret }
+                });
+
+                // now we look for a existing value above it and use it as top of a (possible smaller) block_map so we can use an equation
+                if let Some((spire_pos, spire_val)) = self.blocks.bottom_lane_spire(missing_pos) {
+                    let spires_bottom_lane = bottom_lane.into_iter().filter(|(pos, _)| {
+                        let range = spire_pos.1..=(missing_pos.0-spire_pos.0+spire_pos.1);
+
+                        range.contains(&pos.1)
+                    });
+                }
             }
             //        let left_lane = self.blocks.iter().filter(|(pos, _)| pos.1 == 1);
             //        let right_lane = self.blocks.iter().filter(|(pos, _)| pos.0 == pos.1);
