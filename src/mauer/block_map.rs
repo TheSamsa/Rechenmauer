@@ -168,10 +168,8 @@ impl BlockMap {
                     equation
                 });
 
-            //let (divisor, _) = equation.remove(&missing_pos).unwrap();
-            let (_, (_, first)) = equation.iter().nth(0).unwrap();
-            let first = (**first).unwrap();
-            let equation_val = spire_val.unwrap() - equation.iter().fold(first, |mut eq_val, (_, (val_mul, val))| {
+            let (divisor, _) = equation.remove(&missing_pos).unwrap();
+            let equation_val = spire_val.unwrap() - equation.iter().fold(0, |mut eq_val, (_, (val_mul, val))| {
                 if let Some(val) = **val {
                     eq_val = eq_val + val_mul * val;
                 }
@@ -179,7 +177,11 @@ impl BlockMap {
                 eq_val
             });
 
-            return (missing_pos, Some(equation_val));
+            if equation_val % divisor != 0 {
+                return (missing_pos, None);
+            }
+
+            return (missing_pos, Some(equation_val / divisor));
         }
 
         (Position::new(0,0), None)
