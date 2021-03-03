@@ -1,18 +1,17 @@
 use block_map::BlockMap;
 use std::fmt;
-use std::fmt::{Debug, Display};
-use std::ops::{Add, Sub};
+use std::fmt::Display;
 
 pub use block_map::Position;
 
 mod block_map;
 
-pub struct Mauer<T: Debug + Display + Copy + Eq + Add<Output = T> + Sub<Output = T>> {
+pub struct Mauer {
     rows: usize,
-    blocks: BlockMap<T>,
+    blocks: BlockMap,
 }
 
-impl<T: Debug + Display + Copy + Eq + Add<Output = T> + Sub<Output = T>> Mauer<T> {
+impl Mauer {
     pub fn new(rows: usize) -> Self {
         Self {
             rows,
@@ -20,7 +19,7 @@ impl<T: Debug + Display + Copy + Eq + Add<Output = T> + Sub<Output = T>> Mauer<T
         }
     }
 
-    pub fn set(&mut self, pos: Position, value: T) {
+    pub fn set(&mut self, pos: Position, value: isize) {
         self.blocks.set(pos, value);
     }
 
@@ -34,19 +33,27 @@ impl<T: Debug + Display + Copy + Eq + Add<Output = T> + Sub<Output = T>> Mauer<T
 
             if self.blocks.bottom_lane_value_count() == 1 {
                 // only one value missing
-                let missing_pos = bottom_lane.iter().fold(Position::new(0,0), |ret, (pos, val)| {
-                    if val.is_none() { **pos } else { ret }
-                });
+                let missing_pos =
+                    bottom_lane
+                        .iter()
+                        .fold(
+                            Position::new(0, 0),
+                            |ret, (pos, val)| {
+                                if val.is_none() {
+                                    **pos
+                                } else {
+                                    ret
+                                }
+                            },
+                        );
 
                 // now we look for a existing value above it and use it as top of a (possible smaller) block_map so we can use an equation
-                if let Some((spire_pos, spire_val)) = self.blocks.bottom_lane_spire(missing_pos) {
-                    let spires_bottom_lane = bottom_lane.into_iter().filter(|(pos, _)| {
-                        let range = spire_pos.1..=(missing_pos.0-spire_pos.0+spire_pos.1);
-
-                        range.contains(&pos.1)
-                    });
+                if let (result_pos, Some(result)) = self.blocks.bottom_equation(missing_pos) {
+                    self.blocks.set(result_pos, result);
                 }
             }
+
+            self.calc_possible();
             //        let left_lane = self.blocks.iter().filter(|(pos, _)| pos.1 == 1);
             //        let right_lane = self.blocks.iter().filter(|(pos, _)| pos.0 == pos.1);
         }
@@ -70,7 +77,7 @@ impl<T: Debug + Display + Copy + Eq + Add<Output = T> + Sub<Output = T>> Mauer<T
     }
 }
 
-impl<T: Debug + Display + Copy + Eq + Add<Output = T> + Sub<Output = T>> Display for Mauer<T> {
+impl Display for Mauer {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut format = String::from("");
 

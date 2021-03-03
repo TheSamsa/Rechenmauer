@@ -1,8 +1,6 @@
 use std::cmp::{Eq, Ord, PartialEq, PartialOrd};
 use std::collections::BTreeMap;
-use std::fmt::{Debug, Display};
 use std::iter::Iterator;
-use std::ops::{Add, Sub};
 
 #[derive(Debug, Copy, Clone, PartialOrd, Ord, PartialEq, Eq)]
 pub struct Position(pub usize, pub usize);
@@ -42,14 +40,14 @@ impl Position {
 }
 
 #[derive(Clone)]
-pub struct BlockMap<T: Debug + Display + Copy + Eq + Add<Output = T> + Sub<Output = T>> {
+pub struct BlockMap {
     rows: usize,
     size: usize,
     positions: Vec<Position>,
-    inner: BTreeMap<Position, Option<T>>,
+    inner: BTreeMap<Position, Option<isize>>,
 }
 
-impl<T: Debug + Display + Copy + Eq + Add<Output = T> + Sub<Output = T>> BlockMap<T> {
+impl BlockMap {
     pub fn new(rows: usize) -> Self {
         let mut size = 1;
         let mut positions = Vec::new();
@@ -72,11 +70,11 @@ impl<T: Debug + Display + Copy + Eq + Add<Output = T> + Sub<Output = T>> BlockMa
         }
     }
 
-    pub fn get(&self, pos: &Position) -> Option<&Option<T>> {
+    pub fn get(&self, pos: &Position) -> Option<&Option<isize>> {
         self.inner.get(pos)
     }
 
-    pub fn set(&mut self, pos: Position, value: T) {
+    pub fn set(&mut self, pos: Position, value: isize) {
         self.inner.insert(pos, Some(value));
     }
 
@@ -88,7 +86,7 @@ impl<T: Debug + Display + Copy + Eq + Add<Output = T> + Sub<Output = T>> BlockMa
         self.inner.iter().filter(|(_, val)| val.is_some()).count()
     }
 
-    pub fn bottom_lane(&self) -> BTreeMap<&Position, &Option<T>> {
+    pub fn bottom_lane(&self) -> BTreeMap<&Position, &Option<isize>> {
         self.inner
             .iter()
             .filter(|(pos, _)| pos.0 == self.rows)
@@ -102,11 +100,11 @@ impl<T: Debug + Display + Copy + Eq + Add<Output = T> + Sub<Output = T>> BlockMa
             .count()
     }
 
-    pub fn left_lane(&self) -> BTreeMap<&Position, &Option<T>> {
+    pub fn left_lane(&self) -> BTreeMap<&Position, &Option<isize>> {
         self.inner.iter().filter(|(pos, _)| pos.1 == 1).collect()
     }
 
-    pub fn right_lane(&self) -> BTreeMap<&Position, &Option<T>> {
+    pub fn right_lane(&self) -> BTreeMap<&Position, &Option<isize>> {
         self.inner
             .iter()
             .filter(|(pos, _)| pos.0 == pos.1)
@@ -133,7 +131,61 @@ impl<T: Debug + Display + Copy + Eq + Add<Output = T> + Sub<Output = T>> BlockMa
             && self.inner.get(&pos.bottom_right()).is_none()
     }
 
-    pub fn bottom_lane_spire(&self, missing_pos: Position) -> Option<(&Position, &Option<T>)> {
+    pub fn bottom_equation(&self, missing_pos: Position) -> (Position, Option<isize>) {
+        if let Some((spire_pos, spire_val)) = self.bottom_lane_spire(missing_pos) {
+            let spire_mauer = self.inner.iter().filter(|(pos, _)| {
+                let lower = spire_pos.1;
+                let upper = spire_pos.1 + (pos.0 - spire_pos.0);
+
+                pos.1 >= lower && pos.1 <= upper
+            });
+
+            let mut equation = spire_mauer
+                .fold(BTreeMap::new(), |mut equation, (pos, val)| {
+                    if pos.0 != self.rows {
+                        let multiplier = if let Some((count_pos, _)) = equation.get(pos) {
+                            let ret =  *count_pos;
+                            equation.remove_entry(pos);
+                            ret
+                        } else {
+                            1
+                        };
+
+                        if let Some((bl, _)) = equation.get_mut(&pos.bottom_left()) {
+                            *bl = *bl + multiplier;
+                        } else {
+                            let bl_val = self.inner.get(&pos.bottom_left()).unwrap();
+                            equation.insert(pos.bottom_left(), (multiplier, bl_val));
+                        }
+                        if let Some((br, _)) = equation.get_mut(&pos.bottom_right()) {
+                            *br = *br + multiplier;
+                        } else {
+                            let br_val = self.inner.get(&pos.bottom_right()).unwrap();
+                            equation.insert(pos.bottom_right(), (multiplier, br_val));
+                        }
+                    }
+                    
+                    equation
+                });
+
+            //let (divisor, _) = equation.remove(&missing_pos).unwrap();
+            let (_, (_, first)) = equation.iter().nth(0).unwrap();
+            let first = (**first).unwrap();
+            let equation_val = spire_val.unwrap() - equation.iter().fold(first, |mut eq_val, (_, (val_mul, val))| {
+                if let Some(val) = **val {
+                    eq_val = eq_val + val_mul * val;
+                }
+
+                eq_val
+            });
+
+            return (missing_pos, Some(equation_val));
+        }
+
+        (Position::new(0,0), None)
+    }
+
+    pub fn bottom_lane_spire(&self, missing_pos: Position) -> Option<(&Position, &Option<isize>)> {
         self.inner
             .iter()
             .rev()
@@ -144,7 +196,11 @@ impl<T: Debug + Display + Copy + Eq + Add<Output = T> + Sub<Output = T>> BlockMa
 
                 let lower = missing_pos.1.saturating_sub(missing_pos.0 - pos.0);
                 let lower = if lower < 1 { 1 } else { lower };
-                let upper = if missing_pos.1 <= pos.0 { missing_pos.1 } else { pos.0 };
+                let upper = if missing_pos.1 <= pos.0 {
+                    missing_pos.1
+                } else {
+                    pos.0
+                };
 
                 if lower <= pos.1 && pos.1 <= upper {
                     true
@@ -162,7 +218,7 @@ impl<T: Debug + Display + Copy + Eq + Add<Output = T> + Sub<Output = T>> BlockMa
         }
     }
 
-    fn calc(&mut self, pos: &Position) -> Option<T> {
+    fn calc(&mut self, pos: &Position) -> Option<isize> {
         // skip calculating because we already have a value
         if let Some(value) = self.inner.get(pos) {
             if value.is_some() {
@@ -177,7 +233,7 @@ impl<T: Debug + Display + Copy + Eq + Add<Output = T> + Sub<Output = T>> BlockMa
         }
     }
 
-    fn calc_from_bottom(&self, pos: &Position) -> Option<T> {
+    fn calc_from_bottom(&self, pos: &Position) -> Option<isize> {
         if self.is_bottom(pos) {
             // TODO get rid of unwrap, works for now, because this function is only called via calc
             return self.inner.get(pos).unwrap().as_ref().copied();
@@ -196,7 +252,7 @@ impl<T: Debug + Display + Copy + Eq + Add<Output = T> + Sub<Output = T>> BlockMa
         None
     }
 
-    fn calc_from_left(&self, pos: &Position) -> Option<T> {
+    fn calc_from_left(&self, pos: &Position) -> Option<isize> {
         if self.is_left(pos) {
             // TODO get rid of unwrap, works for now, because this function is only called via calc
             return self.inner.get(pos).unwrap().as_ref().copied();
@@ -215,7 +271,7 @@ impl<T: Debug + Display + Copy + Eq + Add<Output = T> + Sub<Output = T>> BlockMa
         None
     }
 
-    fn calc_from_right(&self, pos: &Position) -> Option<T> {
+    fn calc_from_right(&self, pos: &Position) -> Option<isize> {
         if self.is_right(pos) {
             // TODO get rid of unwrap, works for now, because this function is only called via calc
             return self.inner.get(pos).unwrap().as_ref().copied();
