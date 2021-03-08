@@ -10,7 +10,7 @@ impl Position {
         Self(row, col)
     }
 
-    fn spire() -> Self {
+    fn _spire() -> Self {
         Self(1, 1)
     }
 
@@ -100,18 +100,18 @@ impl BlockMap {
             .count()
     }
 
-    pub fn left_lane(&self) -> BTreeMap<&Position, &Option<isize>> {
+    pub fn _left_lane(&self) -> BTreeMap<&Position, &Option<isize>> {
         self.inner.iter().filter(|(pos, _)| pos.1 == 1).collect()
     }
 
-    pub fn right_lane(&self) -> BTreeMap<&Position, &Option<isize>> {
+    pub fn _right_lane(&self) -> BTreeMap<&Position, &Option<isize>> {
         self.inner
             .iter()
             .filter(|(pos, _)| pos.0 == pos.1)
             .collect()
     }
 
-    pub fn is_top(&self, pos: &Position) -> bool {
+    pub fn _is_top(&self, pos: &Position) -> bool {
         self.inner.get(&pos.top_left()).is_none()
             && self.inner.get(&pos.top_right()).is_none()
             && self.inner.get(&pos.left()).is_none()
@@ -141,7 +141,7 @@ impl BlockMap {
             });
 
             let mut equation = spire_mauer
-                .fold(BTreeMap::new(), |mut equation, (pos, val)| {
+                .fold(BTreeMap::new(), |mut equation, (pos, _)| {
                     if pos.0 != self.rows {
                         let multiplier = if let Some((count_pos, _)) = equation.get(pos) {
                             let ret =  *count_pos;
